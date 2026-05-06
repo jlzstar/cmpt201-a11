@@ -1,0 +1,17 @@
+**/.DS_Store
+**/*.o
+**/*.exe
+**/tags
+**/build
+**/a.out
+**/.vscode
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache
+**/*.log
+**/*.log.*
+**/log.[0-9]*
+**/*.err
+**/core
+**/core.*
+**/vgcore.*

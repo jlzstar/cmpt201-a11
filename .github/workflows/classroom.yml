@@ -1,0 +1,32 @@
+name: CI Runner
+permissions:
+  checks: write
+  actions: read
+  contents: read
+on:
+  workflow_dispatch:
+  repository_dispatch:
+  schedule:
+    # Run auto-grader just after the deadline, and then 3 days later for late submissions.
+    # If due on the 10th at 11:59pm, run auto-grader on 11th and 14th at 9am UTC.
+    # (Marking scripts smart enough to check exact date when calculating late days)
+    # Format: 
+    # - cron: '0 <9am UTC = 2am PT> <DAY> <MONTH> *'    
+    - cron: '0 9 4 8 *'
+    - cron: '0 9 7 8 *'
+jobs:
+  run-autograding-tests:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    container: ghcr.io/sfu-cmpt-201/runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Grader
+        uses: SFU-CMPT-201/graders/.github/actions/a11@main
+      - name: Autograding Reporter
+        uses: SFU-CMPT-201/autograding-grading-reporter@v1
+      - name: Clean up
+        run: |
+          rm -rf ./* ./.* > /dev/null 2>&1 || true
+        if: ${{ always() }}

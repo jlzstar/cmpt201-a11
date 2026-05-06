@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+import os
+import shutil
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
+
+REQUIRED_DIRS = ()
+EXPECTED_EXECUTABLES = ("server", "client")
+COLORS = {
+    "bold": "\x1b[1m",
+    "red": "\x1b[31m",
+    "green": "\x1b[32m",
+    "yellow": "\x1b[33m",
+    "reset": "\x1b[0m",
+}
+ISSUES = []
+ISSUE_COUNTS = {"Failed": 0, "Warning": 0}
+SUCCESS_MESSAGE = None
+MESSAGE_WIDTH = 76
+
+
+def color(text, color_name):
+    return f"{COLORS[color_name]}{text}{COLORS['reset']}"
+
+
+def print_header(title="ASSIGNMENT CHECKER"):
+    width = max(44, len(title) + 4)
+    print()
+    print(color("=" * width, "bold"))
+    print(color(f"  {title}", "bold"))
+    print(color("=" * width, "bold"))
+
+
+def print_section(title):
+    print()
+    print(color(f"  {title}", "bold"))
+
+
+def wrapped_lines(message, width=MESSAGE_WIDTH):
+    return textwrap.wrap(
+        message,
+        width=width,
+        break_long_words=False,
+        break_on_hyphens=False,
+    ) or [""]
+
+
+def print_message(message, indent="  "):
+    for line in wrapped_lines(message):
+        print(f"{indent}{line}")
+
+
+def print_issue(label, color_name, message):
+    label_text = f"{label}:"
+    lines = wrapped_lines(message, width=MESSAGE_WIDTH - len(label_text) - 3)
+    print(f"  {color(label_text, color_name)} {lines[0]}")
+    for line in lines[1:]:
+        print(f"  {' ' * len(label_text)} {line}")
+
+
+def count_text(count, singular, plural=None):
+    if plural is None:
+        plural = f"{singular}s"
+    return f"{count} {singular if count == 1 else plural}"
+
+
+def warn(message):
+    ISSUES.append(("Warning", "yellow", message))
+    ISSUE_COUNTS["Warning"] += 1
+
+
+def error(message):
+    ISSUES.append(("Failed", "red", message))
+    ISSUE_COUNTS["Failed"] += 1
+
+
+def has_issues():
+    return bool(ISSUES)
+
+
+def print_issues():
+    if not ISSUES:
+        return
+    print_section("Issues")
+    for label, color_name, message in ISSUES:
+        print_issue(label, color_name, message)
+    ISSUES.clear()
+
+
+def success(message):
+    global SUCCESS_MESSAGE
+    SUCCESS_MESSAGE = message
+
+
+def is_executable(path):
+    return path.is_file() and os.access(path, os.X_OK)
+
+
+def list_other_executables(build_dir, expected):
+    if not build_dir.is_dir():
+        return []
+    expected = set(expected)
+    return sorted(
+        path.name for path in build_dir.iterdir()
+        if path.name not in expected and is_executable(path)
+    )
+
+
+def run_step(command, cwd):
+    try:
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=120,
+        )
+    except FileNotFoundError:
+        error("The checker could not find CMake. Run it inside the course Docker container or check that the build tools are installed.")
+        return None
+    except subprocess.TimeoutExpired:
+        error("The build step timed out. Check for build scripts that hang or wait for input.")
+        return None
+
+
+def main():
+    print_header("ASSIGNMENT CHECKER")
+
+    root = Path.cwd()
+    ok = True
+
+    for dirname in REQUIRED_DIRS:
+        if not (root / dirname).is_dir():
+            warn("A required project directory was not found. Check the repository layout in the assignment description.")
+            ok = False
+
+    if not (root / "CMakeLists.txt").is_file():
+        error("The CMake configuration file was not found. Check the assignment description for the required project layout.")
+        print_done()
+        return 1
+
+    build_dir = root / "build"
+    shutil.rmtree(build_dir, ignore_errors=True)
+
+    result = run_step(["cmake", "-S", ".", "-B", "build", "--fresh"], root)
+    if result is None or result.returncode != 0:
+        error("The CMake configure step failed. Check compiler errors and the assignment's required CMake structure.")
+        print_done()
+        return 1
+
+    result = run_step(["cmake", "--build", "build", "--clean-first"], root)
+    if result is None or result.returncode != 0:
+        error("The CMake build step failed. Check compiler errors and build-target configuration.")
+        print_done()
+        return 1
+
+    missing = [name for name in EXPECTED_EXECUTABLES if not is_executable(build_dir / name)]
+    if missing:
+        warn("The build finished, but an assignment executable was not found in the build directory. Check your CMake target/output names in the assignment description.")
+        if list_other_executables(build_dir, EXPECTED_EXECUTABLES):
+            warn("Another executable exists in the build directory. This may be a CMake target/output naming issue.")
+        error("One of the assignment executables was not produced. Check the required CMake target/output names in the assignment description.")
+        ok = False
+
+    if ok:
+        success("No basic build or project-layout issues detected.")
+
+    print_done()
+    return 0 if ok else 1
+
+
+def print_done():
+    had_issues = has_issues()
+    print_issues()
+    print_section("Status")
+    if not had_issues and SUCCESS_MESSAGE:
+        print_issue("Success", "green", SUCCESS_MESSAGE)
+    elif had_issues:
+        print_message(
+            "Basic checks need attention: "
+            f"{count_text(ISSUE_COUNTS['Failed'], 'failed check')}, "
+            f"{count_text(ISSUE_COUNTS['Warning'], 'warning')}."
+        )
+        print_message("Review the issues above before submitting.")
+    print_message("These are basic local checks only.")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
