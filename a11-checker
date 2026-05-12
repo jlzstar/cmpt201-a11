@@ -130,6 +130,11 @@ def run_step(command, cwd):
 def main():
     print_header("ASSIGNMENT CHECKER")
 
+    if os.environ.get("ASCIINEMA_REC") == "1":
+        warn("A recording session is currently active. Stop recording before running the checker, then run it in a normal shell.")
+        print_done()
+        return 0
+
     root = Path.cwd()
     ok = True
 
