@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,11 +21,18 @@
 
 typedef struct {
   uint8_t type;
-  uint32_t sender_ip;
-  uint16_t sender_port;
-  uint8_t data[BUF_SIZE];
+  uint32_t ip;
+  uint16_t port;
+  uint8_t data[1024];
   size_t data_len;
-} message_t;
+} msg_t;
+
+typedef struct {
+  int fd;
+  uint32_t ip;
+  uint16_t port;
+  bool active;
+} client_t;
 
 int main(int argc, char *argv[]) {
   if (argc != 3) {
@@ -36,5 +44,16 @@ int main(int argc, char *argv[]) {
     handle_error("# clients is 0");
   }
 
-  return 0;
+  struct sockaddr_in addr;
+  struct remote_addr;
+
+  char buf[BUF_SIZE];
+  memset(&addr, 0, sizeof(struct sockaddr_in));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(PORT);
+  addr.sin_adrrs.s_addr = htonl(INADDR_ANY);
+
+  if (bind(sfd), struct)
+
+    return 0;
 }
