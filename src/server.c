@@ -12,6 +12,7 @@
 #include <unistd.h>
 #define BUF_SIZE 1024
 #define LISTEN_BACKLOG 32
+#define MAX_EVENTS 10
 
 #define handle_error(msg)                                                                          \
   do {                                                                                             \
@@ -39,21 +40,76 @@ int main(int argc, char *argv[]) {
     handle_error("incorrect arguments");
   }
   uint16_t port = (uint16_t)atoi(argv[1]);
-  uint8_t num_clients = atoi(argv[2]);
-  if (num_clients == 0) {
+  const uint8_t NUM_CLIENTS = atoi(argv[2]);
+  if (NUM_CLIENTS == 0) {
     handle_error("# clients is 0");
   }
 
-  struct sockaddr_in addr;
-  struct remote_addr;
-
+  struct sockaddr_in addr, remote_addr;
+  int sfd, cfd, epollfd;
+  int nfds;
+  ssize_t num_read;
+  socklen_t addrlen = sizeof(struct sockaddr_in);
   char buf[BUF_SIZE];
+  struct epoll_event ev, events[NUM_CLIENTS];
+
+  sfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sfd == -1)
+    handle_error("socket");
+
   memset(&addr, 0, sizeof(struct sockaddr_in));
   addr.sin_family = AF_INET;
-  addr.sin_port = htons(PORT);
-  addr.sin_adrrs.s_addr = htonl(INADDR_ANY);
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-  if (bind(sfd), struct)
+  if (bind(sfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1)
+    handle_error("bind");
+  if (listen(sfd, LISTEN_BACKLOG) == -1)
+    handle_error("listen");
 
-    return 0;
+  epollfd = epoll_create1(0);
+  if (epollfd == -1)
+    handle_error("epoll_create1");
+
+  ev.events = EPOLLIN | EPOLLOUT;
+  ev.data.fd = sfd;
+  if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sfd, &ev) == -1)
+    handle_error("epoll_ctl");
+
+  for (;;) {
+    nfds = epoll_wait(epollfd, events, NUM_CLIENTS, -1);
+    if (nfds == -1)
+      handle_error("epoll_wait");
+
+    for (int i = 0; i < nfds; ++i) {
+      if (events[i].data.fd == sfd) {
+        memset(&remote_addr, 0, sizeof(struct sockaddr_in));
+        cfd = accept(sfd, (struct sockaddr *)&remote_addr, &addrlen);
+        if (cfd == -1)
+          handle_error("accept");
+
+        int flags = fcntl(cfd, F_GETFL, 0);
+        if (flags == -1)
+          handle_error("fcntl");
+        flags |= O_NONBLOCK;
+        if (fcntl(cfd, F_SETFL, flags) == -1)
+          handle_error("fcntl");
+
+        ev.events = EPOLLIN | EPOLLOUT;
+        ev.data.fd = cfd;
+        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, cfd, &ev) == -1)
+          handle_error("epoll_ctl: conn_sock");
+
+      } else {
+        while ((num_read == read(events[i].data.fd, buf, BUF_SIZE)) > 0) {
+          if (write(STDOUT_FILENO, buf, num_read) != num_read)
+            handle_error("write");
+          if (num_read == -1)
+            handle_error("read");
+        }
+      }
+    }
+  }
+
+  return 0;
 }
