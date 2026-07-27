@@ -1,13 +1,14 @@
 #include "server.h"
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
 #define BUF_SIZE 1024
 #define LISTEN_BACKLOG 32
 
