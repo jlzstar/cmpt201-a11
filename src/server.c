@@ -1,4 +1,5 @@
 #include "server.h"
+#include "helper.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -13,27 +14,6 @@
 #define BUF_SIZE 1024
 #define LISTEN_BACKLOG 32
 #define MAX_EVENTS 10
-
-#define handle_error(msg)                                                                          \
-  do {                                                                                             \
-    perror(msg);                                                                                   \
-    exit(EXIT_FAILURE);                                                                            \
-  } while (0)
-
-typedef struct {
-  uint8_t type;
-  uint32_t ip;
-  uint16_t port;
-  uint8_t data[1024];
-  size_t data_len;
-} msg_t;
-
-typedef struct {
-  int fd;
-  uint32_t ip;
-  uint16_t port;
-  bool active;
-} client_t;
 
 int main(int argc, char *argv[]) {
   if (argc != 3) {

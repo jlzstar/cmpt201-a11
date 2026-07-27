@@ -11,8 +11,8 @@ find_package(Threads REQUIRED)
 
 include_directories(include)
 
-add_executable(server src/server.c)
-add_executable(client src/client.c)
+add_executable(server src/server.c src/helper.c)
+add_executable(client src/client.c src/helper.c)
 
 target_link_libraries(server PRIVATE Threads::Threads)
 target_link_libraries(client PRIVATE Threads::Threads)
