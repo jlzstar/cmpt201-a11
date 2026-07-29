@@ -15,25 +15,10 @@
 #define LISTEN_BACKLOG 32
 #define MAX_EVENTS 10
 
-int main(int argc, char *argv[]) {
-  if (argc != 3) {
-    handle_error("incorrect arguments");
-  }
-  uint16_t port = (uint16_t)atoi(argv[1]);
-  const uint8_t NUM_CLIENTS = atoi(argv[2]);
-  if (NUM_CLIENTS == 0) {
-    handle_error("# clients is 0");
-  }
+int init_server_socket(int16_t port, int backlog) {
+  struct sockaddr_in addr;
 
-  struct sockaddr_in addr, remote_addr;
-  int sfd, cfd, epollfd;
-  int nfds;
-  ssize_t num_read;
-  socklen_t addrlen = sizeof(struct sockaddr_in);
-  char buf[BUF_SIZE];
-  struct epoll_event ev, events[NUM_CLIENTS];
-
-  sfd = socket(AF_INET, SOCK_STREAM, 0);
+  int sfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sfd == -1)
     handle_error("socket");
 
@@ -44,9 +29,32 @@ int main(int argc, char *argv[]) {
 
   if (bind(sfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1)
     handle_error("bind");
-  if (listen(sfd, LISTEN_BACKLOG) == -1)
+  if (listen(sfd, backlog) == -1)
     handle_error("listen");
+  return sfd;
+}
 
+int main(int argc, char *argv[]) {
+  if (argc != 3) {
+    handle_error("incorrect arguments");
+  }
+  uint16_t port = (uint16_t)atoi(argv[1]);
+  const uint8_t NUM_CLIENTS = atoi(argv[2]);
+  if (NUM_CLIENTS == 0) {
+    handle_error("# clients is 0");
+  }
+
+  struct sockaddr_in remote_addr;
+  int sfd, cfd, epollfd;
+  int nfds;
+  ssize_t num_read;
+  socklen_t addrlen = sizeof(struct sockaddr_in);
+  char buf[BUF_SIZE];
+  struct epoll_event ev, events[NUM_CLIENTS];
+
+  sfd = init_server_socket(port, NUM_CLIENTS);
+
+  // init epoll
   epollfd = epoll_create1(0);
   if (epollfd == -1)
     handle_error("epoll_create1");
