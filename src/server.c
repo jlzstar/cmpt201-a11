@@ -89,6 +89,7 @@ int main(int argc, char *argv[]) {
           handle_error("epoll_ctl: conn_sock");
 
       } else {
+        printf("client connected!\n");
         while ((num_read = read(events[i].data.fd, buf, BUF_SIZE)) > 0) {
           if (write(STDOUT_FILENO, buf, num_read) != num_read)
             handle_error("write");
