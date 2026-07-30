@@ -9,6 +9,10 @@
 #include <unistd.h>
 #define BUF_SIZE 1024
 
+void add_msg2file(FILE *fp, const char *ip, uint16_t port, const char *str) {
+  fprintf(fp, "%-15s%-10u%s", ip, port, str);
+}
+
 int main(int argc, char *argv[]) {
   if (argc != 5)
     handle_error("incorrect args");
@@ -35,7 +39,9 @@ int main(int argc, char *argv[]) {
 
   if (connect(sfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1)
     handle_error("connect");
+
   while ((num_read = read(STDIN_FILENO, buf, BUF_SIZE)) > 0) {
+
     if (write(sfd, buf, num_read) != num_read)
       handle_error("write");
   }

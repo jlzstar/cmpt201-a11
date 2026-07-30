@@ -15,6 +15,16 @@
 #define LISTEN_BACKLOG 32
 #define MAX_EVENTS 10
 
+typedef struct {
+  struct MsgList_t *next;
+  void *data;
+} MsgList_t;
+
+typedef struct {
+  struct MsgList_t *last;
+  uint32_t count;
+} MsgHandle_t;
+
 int init_server_socket(int16_t port, int backlog) {
   struct sockaddr_in addr;
 
