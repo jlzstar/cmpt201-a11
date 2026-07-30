@@ -19,19 +19,4 @@
     exit(EXIT_FAILURE);                                                                            \
   } while (0)
 
-typedef struct {
-  uint8_t type;
-  uint32_t ip;
-  uint16_t port;
-  uint8_t data[1024];
-  size_t data_len;
-} msg_t;
-
-typedef struct {
-  int fd;
-  uint32_t ip;
-  uint16_t port;
-  bool active;
-} client_t;
-
 #endif

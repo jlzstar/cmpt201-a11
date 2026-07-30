@@ -1,26 +1,66 @@
 #include "client.h"
 #include "helper.h"
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
 #define BUF_SIZE 1024
+
+typedef struct {
+  uint8_t type;
+  uint32_t ip;
+  uint16_t port;
+  uint8_t data[1024];
+  size_t data_len;
+} msg_t;
+
+typedef struct {
+  int sfd;
+  FILE *log_fp;
+  int num_msgs;
+  bool active;
+} client_t;
 
 void add_msg2file(FILE *fp, const char *ip, uint16_t port, const char *str) {
   fprintf(fp, "%-15s%-10u%s", ip, port, str);
 }
 
+int convert_b2str(uint8_t *buf, ssize_t buf_size, char *str, ssize_t str_size) {
+  if (buf == NULL || str == NULL || buf_size <= 0 || str_size < (buf_size * 2 + 1)) {
+    return -1;
+  }
+  for (int i = 0; i < buf_size; i++) {
+    sprintf(str + i * 2, "%02X", buf[i]);
+  }
+  str[buf_size * 2] = '\0';
+  return 0;
+}
+
+void *sender_thread(void *args) {
+  client_t *c = (client_t *)args;
+
+  for (int i = 0; i < c->num_msgs; i++) {
+
+    uint8_t buf[10];
+    char str[10 * 2 + 1];
+    getentropy(buf, 10);
+    if (convert(buf, sizeof(buf), str, sizeof(str)) != 0)
+      handle_error("convert");
+  }
+  return 0;
+}
+
+void *receiver_thread(void *args) {}
+
 int main(int argc, char *argv[]) {
+
   if (argc != 5)
     handle_error("incorrect args");
-
-  uint32_t ip = (uint32_t)atoi(argv[1]);
-  uint16_t port = (uint16_t)atoi(argv[2]);
-  uint8_t num_msgs = (uint8_t)atoi(argv[3]);
-  char *lfp = argv[4];
 
   struct sockaddr_in addr;
   ssize_t num_read;
@@ -40,15 +80,21 @@ int main(int argc, char *argv[]) {
   if (connect(sfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1)
     handle_error("connect");
 
-  while ((num_read = read(STDIN_FILENO, buf, BUF_SIZE)) > 0) {
+  client_t c;
+  c.sfd = sfd;
+  c.num_msgs = (uint8_t)atoi(argv[3]);
+  c.log_fp = fopen(argv[4], "w");
+  c.active = false;
 
-    if (write(sfd, buf, num_read) != num_read)
-      handle_error("write");
-  }
-  if (num_read == -1)
-    handle_error("read");
+  pthread_t sender_tid, receiver_tid;
+  pthread_create(&sender_tid, NULL, sender_thread, &c);
+  pthread_create(&receiver_tid, NULL, receiver_thread, &c);
 
-  exit(EXIT_SUCCESS);
+  pthread_join(sender_tid, NULL);
+  pthread_join(receiver_tid, NULL);
+
+  fclose(c.log_fp);
+  close(c.sfd);
 
   return 0;
 }
