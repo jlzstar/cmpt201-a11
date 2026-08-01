@@ -64,6 +64,7 @@ void *sender_thread(void *args) {
     memcpy(out_msg + 1, str, sizeof(str));
     size_t out_msg_len = 1 + strlen(str);
     out_msg[out_msg_len] = '\n';
+    out_msg_len++;
 
     // send the byte to server one by one
     ssize_t total_msg_sent = 0;
@@ -73,14 +74,14 @@ void *sender_thread(void *args) {
         handle_error("write");
       total_msg_sent += n;
     }
-
-    // send a type 1 msg after sending all the type 0 msgs
-    uint8_t end_msg[2] = {'1', '\n'};
-    ssize_t m = write(c->sfd, end_msg, sizeof(end_msg));
-    if (m == -1)
-      handle_error("write");
-    c->active = false;
   }
+  // send a type 1 msg after sending all the type 0 msgs
+  uint8_t end_msg[2] = {1, '\n'};
+  ssize_t m = write(c->sfd, end_msg, sizeof(end_msg));
+  if (m == -1)
+    handle_error("write");
+  c->active = false;
+
   return NULL;
 }
 
@@ -116,11 +117,11 @@ void *receiver_thread(void *args) {
       memcpy(&port, buf + 1 + 4, 2);
 
       char msg[BUF_SIZE + 1];
-      size_t msg_len;
+      size_t msg_len = newline - buf;
       memcpy(msg, buf + 1 + 4 + 2, msg_len);
 
       char ip_final[32];
-      inet_ntop(AF_INET, &ip, ip_final, 4);
+      inet_ntop(AF_INET, &ip, ip_final, sizeof(ip_final));
       uint16_t port_final = ntohs(port);
 
       printf("%-15s%-10u%s\n", ip_final, port_final, msg);
@@ -145,6 +146,7 @@ int main(int argc, char *argv[]) {
   ssize_t num_read;
   char buf[BUF_SIZE];
   int sfd;
+  int16_t port = (int16_t)atoi(argv[2]);
 
   sfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sfd == -1)
@@ -152,7 +154,7 @@ int main(int argc, char *argv[]) {
 
   memset(&addr, 0, sizeof(struct sockaddr_in));
   addr.sin_family = AF_INET;
-  addr.sin_port = htons(*argv[2]);
+  addr.sin_port = htons(port);
   if (inet_pton(AF_INET, argv[1], &addr.sin_addr) <= 0)
     handle_error("inet_pton");
 
