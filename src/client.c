@@ -29,6 +29,7 @@ typedef struct {
 
 void add_msg2file(FILE *fp, const char *ip, uint16_t port, const char *str) {
   fprintf(fp, "%-15s%-10u%s", ip, port, str);
+  fprintf(fp, "\n");
 }
 
 int convert_b2str(uint8_t *buf, ssize_t buf_size, char *str, ssize_t str_size) {
@@ -86,7 +87,7 @@ void *sender_thread(void *args) {
 // receives msgs from other clients from the server
 void *receiver_thread(void *args) {
   client_t *c = (client_t *)args;
-  char buf[BUF_SIZE];
+  uint8_t buf[BUF_SIZE];
   size_t buf_len = 0;
   for (;;) {
     ssize_t n = read(c->sfd, buf_len + buf, sizeof(buf) - buf_len);
@@ -97,6 +98,16 @@ void *receiver_thread(void *args) {
     }
     buf_len += n;
 
+    // find the newline position
+    uint8_t *newline;
+    for (size_t i = 0; i < buf_len; i++) {
+      if (buf[i] == '\n') {
+        newline = &buf[i];
+        break;
+      }
+    }
+    size_t msg_len = sizeof(newline);
+
     uint8_t type = buf[0];
     if (type == 0) {
       uint32_t ip;
@@ -106,53 +117,63 @@ void *receiver_thread(void *args) {
 
       char msg[BUF_SIZE + 1];
       size_t msg_len;
+      memcpy(msg, buf + 1 + 4 + 2, msg_len);
 
-      add_msg2file() else if (type == 1) {
-        c->active = false;
-        return NULL;
-      }
+      char ip_final[32];
+      inet_ntop(AF_INET, &ip, ip_final, 4);
+      uint16_t port_final = ntohs(port);
 
+      printf("%-15s%-10u%s\n", ip_final, port_final, msg);
+
+      add_msg2file(c->log_fp, (const char *)ip_final, port_final, msg);
+
+    } else if (type == 1) {
+      c->active = false;
       return NULL;
     }
+  }
 
-    int main(int argc, char *argv[]) {
+  return NULL;
+}
 
-      if (argc != 5)
-        handle_error("incorrect args");
+int main(int argc, char *argv[]) {
 
-      struct sockaddr_in addr;
-      ssize_t num_read;
-      char buf[BUF_SIZE];
-      int sfd;
+  if (argc != 5)
+    handle_error("incorrect args");
 
-      sfd = socket(AF_INET, SOCK_STREAM, 0);
-      if (sfd == -1)
-        handle_error("socket");
+  struct sockaddr_in addr;
+  ssize_t num_read;
+  char buf[BUF_SIZE];
+  int sfd;
 
-      memset(&addr, 0, sizeof(struct sockaddr_in));
-      addr.sin_family = AF_INET;
-      addr.sin_port = htons(port);
-      if (inet_pton(AF_INET, argv[2], &addr.sin_addr) <= 0)
-        handle_error("inet_pton");
+  sfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sfd == -1)
+    handle_error("socket");
 
-      if (connect(sfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1)
-        handle_error("connect");
+  memset(&addr, 0, sizeof(struct sockaddr_in));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(*argv[2]);
+  if (inet_pton(AF_INET, argv[1], &addr.sin_addr) <= 0)
+    handle_error("inet_pton");
 
-      client_t c;
-      c.sfd = sfd;
-      c.num_msgs = (uint8_t)atoi(argv[3]);
-      c.log_fp = fopen(argv[4], "w");
-      c.active = false;
+  if (connect(sfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1)
+    handle_error("connect");
 
-      pthread_t sender_tid, receiver_tid;
-      pthread_create(&sender_tid, NULL, sender_thread, &c);
-      pthread_create(&receiver_tid, NULL, receiver_thread, &c);
+  client_t c;
+  c.sfd = sfd;
+  c.num_msgs = (uint8_t)atoi(argv[3]);
+  c.log_fp = fopen(argv[4], "w");
+  c.active = false;
 
-      pthread_join(sender_tid, NULL);
-      pthread_join(receiver_tid, NULL);
+  pthread_t sender_tid, receiver_tid;
+  pthread_create(&sender_tid, NULL, sender_thread, &c);
+  pthread_create(&receiver_tid, NULL, receiver_thread, &c);
 
-      fclose(c.log_fp);
-      close(c.sfd);
+  pthread_join(sender_tid, NULL);
+  pthread_join(receiver_tid, NULL);
 
-      return 0;
-    }
+  fclose(c.log_fp);
+  close(c.sfd);
+
+  return 0;
+}
