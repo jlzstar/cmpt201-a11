@@ -16,16 +16,6 @@
 #define MAX_EVENTS 10
 
 typedef struct {
-  struct MsgList_t *next;
-  void *data;
-} MsgList_t;
-
-typedef struct {
-  struct MsgList_t *last;
-  uint32_t count;
-} MsgHandle_t;
-
-typedef struct {
   int sfd;
   int32_t ip;
   int16_t port;
@@ -53,6 +43,14 @@ int init_server_socket(int16_t port, int backlog) {
   return sfd;
 }
 
+char *s2c_msging_protocol(char *client_buf, sockaddr_in *client_addr) {
+  dssf sdfsf
+
+      char *outbuf[BUF_SIZE];
+
+  return out_buf;
+}
+
 void send_type0_msg() { return; }
 
 void send_type1_msg() { return; }
@@ -72,7 +70,7 @@ int main(int argc, char *argv[]) {
 
   client_t clients[NUM_CLIENTS];
 
-  struct sockaddr_in remote_addr;
+  struct sockaddr_in client_addr;
   int sfd, cfd, epollfd;
   int nfds;
   ssize_t num_read;
@@ -82,11 +80,12 @@ int main(int argc, char *argv[]) {
 
   sfd = init_server_socket(port, NUM_CLIENTS);
 
-  // init epoll
+  // 1. create epoll
   epollfd = epoll_create1(0);
   if (epollfd == -1)
     handle_error("epoll_create1");
 
+  // 2.
   ev.events = EPOLLIN | EPOLLOUT;
   ev.data.fd = sfd;
   if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sfd, &ev) == -1)
@@ -98,45 +97,60 @@ int main(int argc, char *argv[]) {
       handle_error("epoll_wait");
 
     for (int i = 0; i < nfds; ++i) {
+      // case 1: the incoming signal is a new client trying to connect
       if (events[i].data.fd == sfd) {
-        memset(&remote_addr, 0, sizeof(struct sockaddr_in));
-        cfd = accept(sfd, (struct sockaddr *)&remote_addr, &addrlen);
+        memset(&client_addr, 0, sizeof(struct sockaddr_in));
+        cfd = accept(sfd, (struct sockaddr *)&client_addr, &addrlen);
         if (cfd == -1)
           handle_error("accept");
 
-      } else {
         // set up non-blocking
         int flags = fcntl(cfd, F_GETFL, 0);
         if (flags == -1)
           handle_error("fcntl");
         flags |= O_NONBLOCK;
         if (fcntl(cfd, F_SETFL, flags) == -1)
-          handle_error("fcntl");
+          handle_errro("fcntl");
 
-        ev.events = EPOLLIN | EPOLLOUT;
+        ev.events = EPOLLIN;
         ev.data.fd = cfd;
+
+        // add cfd into epoll watchlist
         if (epoll_ctl(epollfd, EPOLL_CTL_ADD, cfd, &ev) == -1)
           handle_error("epoll_ctl: conn_sock");
 
-        // initialize clients
-        clients[i].active = true;
-        clients[i].sfd = cfd;
-        clients[i].ip = remote_addr.sin_addr.s_addr;
-        clients[i].port = remote_addr.sin_port;
-        clients[i].buf_len = 0;
-      }
+      } else {
+        // case 2: the incoming signal is an existing client sending data
 
-      printf("client connected!\n");
-      while ((num_read = read(events[i].data.fd, buf, BUF_SIZE)) > 0) {
+        ssize_t n = read(events[i].data.fd, buf, BUF_SIZE);
+        while (n > 0) {
 
-        if (write(events[i].data.fd, buf, num_read) != num_read)
-          handle_error("write");
-        if (num_read == -1)
-          handle_error("read");
+          // get sender ip and port
+          char ip_str[INET_ADDRSTRLEN];
+          if (inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str) == NULL) {
+            handle_error("inet_ntop");
+          }
+
+          uint16_t port_c = ntohs(client_addr.sin_port); 
+
+          printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
+
+          // message protocol 
+
+
+          // send the incoming msg to ALL clients (including sender)
+          
+
+          // determine if server should terminate 
+
+          // 
+
+
+          if
+          
+          if (n == -1) handle_error("read"); // client disconnects
+        }
       }
     }
+    return 0;
   }
-}
-
-return 0;
-}
