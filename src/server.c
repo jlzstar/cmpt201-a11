@@ -106,6 +106,8 @@ int main(int argc, char *argv[]) {
   if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sfd, &ev) == -1)
     handle_error("epoll_ctl");
 
+  int num_type1_msgs = 0;
+
   for (;;) {
     nfds = epoll_wait(epollfd, events, NUM_CLIENTS, -1);
     if (nfds == -1)
@@ -160,14 +162,19 @@ int main(int argc, char *argv[]) {
             write(events[j].data.fd, out_buf, out_buf_len);
           }
           pthread_mutex_unlock(&clientLock);
-          // determine if server should terminate
 
-          //
+          // check if all clients have sent a type 1 msg, and
+          // determine if server should terminate itself
+          if (buf[0] == '1') {
+            num_type1_msgs++;
+          }
+          if (num_type1_msgs >= NUM_CLIENTS) {
+            printf("server terminates successfully");
+            return 0;
+          }
 
-          if
-
-            if (n == -1)
-              handle_error("read"); // client disconnects
+          if (n == -1)
+            handle_error("read"); // client disconnects
         }
       }
     }
