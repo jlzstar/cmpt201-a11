@@ -43,12 +43,25 @@ int init_server_socket(int16_t port, int backlog) {
   return sfd;
 }
 
-char *s2c_msging_protocol(char *client_buf, sockaddr_in *client_addr) {
-  dssf sdfsf
+size_t s2c_msging_protocol(char *client_buf, char ip_str, uint16_t port, char *out_buf) {
 
-      char *outbuf[BUF_SIZE];
+  size_t offset = 0;
+  out_buf[offset] = client_buf[0];
+  offset += 1;
 
-  return out_buf;
+  memcpy(out_buf + offset, &ip_str, 4);
+  offset += 4;
+
+  memcpy(out_buf + offset, &port, 2);
+  offset += 2;
+
+  size_t msg_len = strnlen(client_buf, BUF_SIZE);
+  memcpy(out_buf + offset, client_buf, msg_len);
+  offset += msg_len;
+
+  out_buf[offset] = '\n';
+  offset += 1;
+  return offset;
 }
 
 void send_type0_msg() { return; }
