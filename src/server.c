@@ -15,6 +15,8 @@
 #define LISTEN_BACKLOG 32
 #define MAX_EVENTS 10
 
+pthread_mutex_t clientLock;
+
 typedef struct {
   int sfd;
   int32_t ip;
@@ -150,10 +152,14 @@ int main(int argc, char *argv[]) {
 
           // message protocol
           char out_buf[BUF_SIZE + 4 + 2];
-          s2c_msging_protocol(buf, ip_str, port_c, out_buf);
+          ssize_t out_buf_len = s2c_msging_protocol(buf, ip_str, port_c, out_buf);
 
           // send the incoming msg to ALL clients (including sender)
-
+          pthread_mutex_lock(&clientLock);
+          for (int j = 0; j < NUM_CLIENTS; j++) {
+            write(events[j].data.fd, out_buf, out_buf_len);
+          }
+          pthread_mutex_unlock(&clientLock);
           // determine if server should terminate
 
           //
