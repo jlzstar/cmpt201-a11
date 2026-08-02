@@ -43,7 +43,7 @@ int init_server_socket(int16_t port, int backlog) {
   return sfd;
 }
 
-size_t s2c_msging_protocol(char *client_buf, char ip_str, uint16_t port, char *out_buf) {
+size_t s2c_msging_protocol(char *client_buf, char *ip_str, uint16_t port, char *out_buf) {
 
   size_t offset = 0;
   out_buf[offset] = client_buf[0];
@@ -140,28 +140,28 @@ int main(int argc, char *argv[]) {
 
           // get sender ip and port
           char ip_str[INET_ADDRSTRLEN];
-          if (inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str) == NULL) {
+          if (inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str)) == NULL) {
             handle_error("inet_ntop");
           }
 
-          uint16_t port_c = ntohs(client_addr.sin_port); 
+          uint16_t port_c = ntohs(client_addr.sin_port);
 
           printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
 
-          // message protocol 
-
+          // message protocol
+          char out_buf[BUF_SIZE + 4 + 2];
+          s2c_msging_protocol(buf, ip_str, port_c, out_buf);
 
           // send the incoming msg to ALL clients (including sender)
-          
 
-          // determine if server should terminate 
+          // determine if server should terminate
 
-          // 
-
+          //
 
           if
-          
-          if (n == -1) handle_error("read"); // client disconnects
+
+            if (n == -1)
+              handle_error("read"); // client disconnects
         }
       }
     }
