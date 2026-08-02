@@ -88,9 +88,9 @@ int main(int argc, char *argv[]) {
   struct sockaddr_in client_addr;
   int sfd, cfd, epollfd;
   int nfds;
-  ssize_t num_read;
+  ssize_t num_read[BUF_SIZE];
   socklen_t addrlen = sizeof(struct sockaddr_in);
-  char buf[BUF_SIZE];
+  uint8_t read_buf[BUF_SIZE];
   struct epoll_event ev, events[NUM_CLIENTS];
 
   sfd = init_server_socket(port, NUM_CLIENTS);
@@ -136,11 +136,16 @@ int main(int argc, char *argv[]) {
         if (epoll_ctl(epollfd, EPOLL_CTL_ADD, cfd, &ev) == -1)
           handle_error("epoll_ctl: conn_sock");
 
+        clients[i].sfd = cfd;
+        clients[i].active = true;
+
       } else {
         // case 2: the incoming signal is an existing client sending data
+        //
+        while ((read(events[i].data.fd, read_buf, BUF_SIZE)) > 0) {
 
-        ssize_t n = read(events[i].data.fd, buf, BUF_SIZE);
-        while (n > 0) {
+          memset(client[i].buf, &read_buf, BUF_SIZE);
+          client[i].buf_len = ;
 
           // get sender ip and port
           char ip_str[INET_ADDRSTRLEN];
@@ -159,7 +164,9 @@ int main(int argc, char *argv[]) {
           // send the incoming msg to ALL clients (including sender)
           pthread_mutex_lock(&clientLock);
           for (int j = 0; j < NUM_CLIENTS; j++) {
-            write(events[j].data.fd, out_buf, out_buf_len);
+            if (clients[j].active == true) {
+              write(clients[j].sfd, out_buf, out_buf_len);
+            }
           }
           pthread_mutex_unlock(&clientLock);
 
