@@ -49,7 +49,7 @@ int init_server_socket(int16_t port, int backlog) {
   return sfd;
 }
 
-size_t s2c_msging_protocol(char *client_buf, char *ip_str, uint16_t port, char *out_buf) {
+size_t s2c_msging_protocol(uint8_t *client_buf, uint32_t *ip_str, uint16_t port, char *out_buf) {
 
   size_t offset = 0;
   out_buf[offset] = client_buf[0];
@@ -172,53 +172,40 @@ int main(int argc, char *argv[]) {
         // case 2: the incoming signal is an existing client sending data
 
         size_t num_read = 0;
-        while (num_read = read(events[i].data.fd, read_buf, BUF_SIZE)) > 0) {
+        while ((num_read = read(events[i].data.fd, read_buf, BUF_SIZE)) > 0) {
 
-            // get sender ip and port
-            char ip_str[INET_ADDRSTRLEN];
-            if (inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str)) == NULL) {
-              handle_error("inet_ntop");
-            }
-            uint16_t port_c = ntohs(client_addr.sin_port);
-
-            // initalize client_t
-            memset(&clients[i].buf, &read_buf, BUF_SIZE);
-            clients[i].buf_len = num_read;
-            clients[i].ip = ip_str;
-            clients[i].port = port_c;
-            clients[i].active = true;
-
-            printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
-
-            // message protocol
-            char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
-            ssize_t out_buf_len = s2c_msging_protocol(&read_buf, &ip_str, port_c, out_buf);
-
-            // send the incoming msg to ALL clients (including sender)
-            bool term = handle_client_msg(clients, NUM_CLIENTS, i, out_buf, out_buf_len);
-
-            /*
-            pthread_mutex_lock(&clientLock);
-            for (int j = 0; j < NUM_CLIENTS; j++) {
-              if (clients[j].active == true) {
-                write(clients[j].sfd, out_buf, out_buf_len);
-              }
-            }
-            pthread_mutex_unlock(&clientLock);
-            */
-
-            // check if all clients have sent a type 1 msg, and
-            // determine if server should terminate itself
-            if (num_type1_msgs >= NUM_CLIENTS) {
-              close();
-
-              printf("server terminates successfully");
-              return 0;
-            }
-
-            if (n == -1)
-              handle_error("read"); // client disconnects
+          // get sender ip and port
+          char ip_str[INET_ADDRSTRLEN];
+          if (inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str)) == NULL) {
+            handle_error("inet_ntop");
           }
+          uint16_t port_c = ntohs(client_addr.sin_port);
+
+          // initalize client_t
+          memset(&clients[i].buf, &read_buf, BUF_SIZE);
+          clients[i].buf_len = num_read;
+          clients[i].ip = ip_str;
+          clients[i].port = port_c;
+          clients[i].active = true;
+
+          printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
+
+          // message protocol
+          char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
+          ssize_t out_buf_len = s2c_msging_protocol(&read_buf, &ip_str, port_c, out_buf);
+
+          // send the incoming msg to ALL clients (including sender)
+          bool term = handle_client_msg(clients, NUM_CLIENTS, i, out_buf, out_buf_len);
+          if (term == true) {
+            close_all_sfd();
+            close(sfd);
+            printf("server terminates successfully");
+            return 0;
+          }
+
+          if (num_read == -1)
+            handle_error("read"); // client disconnects
+        }
       }
     }
   }
