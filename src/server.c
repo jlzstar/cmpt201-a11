@@ -127,7 +127,7 @@ int main(int argc, char *argv[]) {
           handle_error("fcntl");
         flags |= O_NONBLOCK;
         if (fcntl(cfd, F_SETFL, flags) == -1)
-          handle_errro("fcntl");
+          handle_error("fcntl");
 
         ev.events = EPOLLIN;
         ev.data.fd = cfd;
@@ -178,5 +178,6 @@ int main(int argc, char *argv[]) {
         }
       }
     }
-    return 0;
   }
+  return 0;
+}
