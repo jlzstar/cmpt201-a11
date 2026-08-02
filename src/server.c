@@ -17,6 +17,10 @@
 
 pthread_mutex_t clientLock;
 
+static int num_clients_active = 0;
+static int num_clients_done = 0;
+static int num_type1_received = 0;
+
 typedef struct {
   int sfd;
   int32_t ip;
@@ -66,22 +70,37 @@ size_t s2c_msging_protocol(char *client_buf, char *ip_str, uint16_t port, char *
   return offset;
 }
 
-void send_type0_msg(client_t *clients, uint8_t num_clients, int sender_index, char *buf,
-                    size_t buf_len) {
-  char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
-  size_t out_len =
-      s2c_msging_protocol(buf, clients[sender_index].ip, clients[sender_index].port, out_buf);
-  for (int i = 0; i < num_clients; i++) {
-    if (clients[i].active == true)
-      write(clients[i].sfd, out_buf, out_len);
+bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index, char *buf,
+                       size_t buf_len) {
+
+  int type = buf[0];
+  if (type == 0) {
+    char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
+    size_t out_len =
+        s2c_msging_protocol(buf, clients[sender_index].ip, clients[sender_index].port, out_buf);
+    for (int i = 0; i < num_clients; i++) {
+      if (clients[i].active == true)
+        write(clients[i].sfd, out_buf, out_len);
+    }
+    return false; // server does not terminate
+
+  } else if (type == 1) {
+    clients[sender_index].active = false;
+    num_type1_received++;
+    if (num_type1_received >= num_clients) {
+      // send type 1 msg to all clients
+      uint8_t end = '1';
+      for (int i = 0; i < num_clients; i++) {
+        if (clients[i].active == true) {
+          write(clients[i].sfd, &end, 1);
+        }
+      }
+      return true; // server should terminate
+    }
   }
-  return;
+
+  return false;
 }
-
-void send_type1_msg() { return; }
-
-static int num_clients_active = 0;
-static int num_clients_done = 0;
 
 int main(int argc, char *argv[]) {
   if (argc != 3) {
@@ -175,8 +194,10 @@ int main(int argc, char *argv[]) {
             char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
             ssize_t out_buf_len = s2c_msging_protocol(&read_buf, &ip_str, port_c, out_buf);
 
-            /*
             // send the incoming msg to ALL clients (including sender)
+            bool term = handle_client_msg(clients, NUM_CLIENTS, i, out_buf, out_buf_len);
+
+            /*
             pthread_mutex_lock(&clientLock);
             for (int j = 0; j < NUM_CLIENTS; j++) {
               if (clients[j].active == true) {
@@ -185,12 +206,6 @@ int main(int argc, char *argv[]) {
             }
             pthread_mutex_unlock(&clientLock);
             */
-
-            if (read_buf[0] == '1') {
-              send_type1_msg();
-            } else if (read_buf[0] == '0') {
-              send_type0_msg();
-            }
 
             // check if all clients have sent a type 1 msg, and
             // determine if server should terminate itself
