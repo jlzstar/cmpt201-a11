@@ -66,7 +66,17 @@ size_t s2c_msging_protocol(char *client_buf, char *ip_str, uint16_t port, char *
   return offset;
 }
 
-void send_type0_msg() { return; }
+void send_type0_msg(client_t *clients, uint8_t num_clients, int sender_index, char *buf,
+                    size_t buf_len) {
+  char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
+  size_t out_len =
+      s2c_msging_protocol(buf, clients[sender_index].ip, clients[sender_index].port, out_buf);
+  for (int i = 0; i < num_clients; i++) {
+    if (clients[i].active == true)
+      write(clients[i].sfd, out_buf, out_len);
+  }
+  return;
+}
 
 void send_type1_msg() { return; }
 
@@ -162,9 +172,10 @@ int main(int argc, char *argv[]) {
             printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
 
             // message protocol
-            char out_buf[BUF_SIZE + 4 + 2];
+            char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
             ssize_t out_buf_len = s2c_msging_protocol(&read_buf, &ip_str, port_c, out_buf);
 
+            /*
             // send the incoming msg to ALL clients (including sender)
             pthread_mutex_lock(&clientLock);
             for (int j = 0; j < NUM_CLIENTS; j++) {
@@ -173,12 +184,16 @@ int main(int argc, char *argv[]) {
               }
             }
             pthread_mutex_unlock(&clientLock);
+            */
+
+            if (read_buf[0] == '1') {
+              send_type1_msg();
+            } else if (read_buf[0] == '0') {
+              send_type0_msg();
+            }
 
             // check if all clients have sent a type 1 msg, and
             // determine if server should terminate itself
-            if (read_buf[0] == '1') {
-              num_type1_msgs++;
-            }
             if (num_type1_msgs >= NUM_CLIENTS) {
               close();
 
