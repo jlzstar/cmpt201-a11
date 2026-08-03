@@ -1,7 +1,9 @@
 #define _DARWIN_C_SOURCE
 #include "client.h"
 #include "helper.h"
+#include <arpa/inet.h>
 #include <errno.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +26,7 @@ typedef struct {
   int sfd;
   FILE *log_fp;
   int num_msgs;
-  bool active;
+  atomic_bool active;
 } client_t;
 
 void add_msg2file(FILE *fp, const char *ip, uint16_t port, const char *str) {
@@ -80,7 +82,7 @@ void *sender_thread(void *args) {
   ssize_t m = write(c->sfd, end_msg, sizeof(end_msg));
   if (m == -1)
     handle_error("write");
-  c->active = false;
+  atomic_store(&c->active, false);
 
   return NULL;
 }
@@ -90,8 +92,8 @@ void *receiver_thread(void *args) {
   client_t *c = (client_t *)args;
   uint8_t buf[BUF_SIZE];
   size_t buf_len = 0;
-  for (;;) {
-    ssize_t n = read(c->sfd, buf_len + buf, sizeof(buf) - buf_len);
+  ssize_t n = 0;
+  while (n == read(c->sfd, buf_len + buf, sizeof(buf) - buf_len) > 0) {
     if (n == -1) {
       handle_error("read");
     } else if (n == 0) { // server closed connection
@@ -100,13 +102,16 @@ void *receiver_thread(void *args) {
     buf_len += n;
 
     // find the newline position
-    uint8_t *newline;
+    uint8_t *newline = NULL;
     for (size_t i = 0; i < buf_len; i++) {
       if (buf[i] == '\n') {
         newline = &buf[i];
         break;
       }
     }
+    if (newline == NULL)
+      handle_error("newline pos not found");
+
     size_t msg_len = sizeof(newline);
 
     uint8_t type = buf[0];
@@ -129,11 +134,12 @@ void *receiver_thread(void *args) {
       add_msg2file(c->log_fp, (const char *)ip_final, port_final, msg);
 
     } else if (type == 1) {
-      c->active = false;
+      atomic_store(&c->active, false);
+      close(c->sfd);
+      fclose(c->log_fp);
       return NULL;
     }
   }
-
   return NULL;
 }
 
@@ -165,7 +171,7 @@ int main(int argc, char *argv[]) {
   c.sfd = sfd;
   c.num_msgs = (uint8_t)atoi(argv[3]);
   c.log_fp = fopen(argv[4], "w");
-  c.active = false;
+  atomic_store(&c.active, true);
 
   pthread_t sender_tid, receiver_tid;
   pthread_create(&sender_tid, NULL, sender_thread, &c);
