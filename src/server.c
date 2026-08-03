@@ -16,15 +16,16 @@
 #define MAX_EVENTS 10
 
 pthread_mutex_t clientLock;
-
+pthread_mutex_t clientLock2;
 static int num_clients_active = 0;
 static int num_clients_done = 0;
 static int num_type1_received = 0;
+static int next_slot = 0;
 
 typedef struct {
   int sfd;
-  int32_t ip;
-  int16_t port;
+  uint32_t ip;
+  uint16_t port;
   bool active;
   uint8_t buf[BUF_SIZE];
   size_t buf_len;
@@ -80,14 +81,14 @@ size_t s2c_msging_protocol(uint8_t *client_buf, size_t client_buf_len, uint32_t 
   return offset;
 }
 
-bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index, char *buf,
-                       size_t buf_len) {
+bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index, uint8_t *read_buf,
+                       size_t num_read) {
 
-  int type = buf[0];
+  int type = read_buf[0];
   if (type == 0) {
     char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
-    size_t out_len =
-        s2c_msging_protocol(buf, clients[sender_index].ip, clients[sender_index].port, out_buf);
+    size_t out_len = s2c_msging_protocol(read_buf, num_read, &clients[sender_index].ip,
+                                         clients[sender_index].port, out_buf);
     for (int i = 0; i < num_clients; i++) {
       if (clients[i].active == true)
         write(clients[i].sfd, out_buf, out_len);
@@ -112,6 +113,14 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index,
   return false;
 }
 
+int find_client_index_by_fd(client_t *clients, int num_clients, int fd) {
+  for (int i = 0; i < num_clients; i++) {
+    if (clients[i].sfd == fd && clients[i].active == true)
+      return i;
+  }
+  return -1;
+}
+
 int main(int argc, char *argv[]) {
   if (argc != 3) {
     handle_error("incorrect arguments");
@@ -127,9 +136,8 @@ int main(int argc, char *argv[]) {
   struct sockaddr_in client_addr;
   int sfd, cfd, epollfd;
   int nfds;
-  ssize_t num_read[BUF_SIZE];
   socklen_t addrlen = sizeof(struct sockaddr_in);
-  uint8_t *read_buf;
+  uint8_t read_buf[BUF_SIZE];
   struct epoll_event ev, events[NUM_CLIENTS];
 
   sfd = init_server_socket(port, NUM_CLIENTS);
@@ -175,40 +183,41 @@ int main(int argc, char *argv[]) {
         if (epoll_ctl(epollfd, EPOLL_CTL_ADD, cfd, &ev) == -1)
           handle_error("epoll_ctl: conn_sock");
 
-        clients[i].sfd = cfd;
-        clients[i].active = true;
-        clients[i].ip = client_addr.sin_addr.s_addr;
-        clients[i].port = client_addr.sin_port;
+        int indx = next_slot++;
+        clients[indx].sfd = cfd;
+        clients[indx].active = true;
+        clients[indx].ip = client_addr.sin_addr.s_addr;
+        clients[indx].port = client_addr.sin_port;
 
       } else {
         // case 2: the incoming signal is an existing client sending data
+
+        int indx = find_client_index_by_fd(clients, NUM_CLIENTS, events[i].data.fd);
+        if (indx == -1)
+          handle_error("find_cl_idx_by_fd");
 
         size_t num_read = 0;
         while ((num_read = read(events[i].data.fd, read_buf, BUF_SIZE)) > 0) {
 
           // get sender ip and port
-          char ip_str[INET_ADDRSTRLEN];
+          uint32_t ip_str[INET_ADDRSTRLEN];
           if (inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str)) == NULL) {
             handle_error("inet_ntop");
           }
           uint16_t port_c = ntohs(client_addr.sin_port);
 
           // initalize client_t
-          memset(&clients[i].buf, &read_buf, BUF_SIZE);
-          clients[i].buf_len = num_read;
-          clients[i].ip = ip_str;
-          clients[i].port = port_c;
-          clients[i].active = true;
+
+          memset(clients[indx].buf, read_buf, BUF_SIZE);
+          clients[indx].buf_len = num_read;
+          clients[indx].ip = ip_str;
+          clients[indx].port = port_c;
+          clients[indx].active = true;
 
           printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
 
-          // message protocosl
-          char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
-          ssize_t out_buf_len =
-              s2c_msging_protocol(read_buf, num_read, clients[i].ip, clients[i].port, out_buf);
-
           // send the incoming msg to ALL clients (including sender)
-          bool term = handle_client_msg(clients, NUM_CLIENTS, i, out_buf, out_buf_len);
+          bool term = handle_client_msg(clients, NUM_CLIENTS, i, read_buf, num_read);
           if (term == true) {
             close_all_sfd(clients, NUM_CLIENTS);
             close(sfd);
