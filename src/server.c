@@ -153,8 +153,6 @@ int main(int argc, char *argv[]) {
   if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sfd, &ev) == -1)
     handle_error("epoll_ctl");
 
-  int num_type1_msgs = 0;
-
   for (;;) {
     nfds = epoll_wait(epollfd, events, NUM_CLIENTS, -1);
     if (nfds == -1)
@@ -199,36 +197,24 @@ int main(int argc, char *argv[]) {
         size_t num_read = 0;
         while ((num_read = read(events[i].data.fd, read_buf, BUF_SIZE)) > 0) {
 
-          // get sender ip and port
-          uint32_t ip_str[INET_ADDRSTRLEN];
-          if (inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str)) == NULL) {
-            handle_error("inet_ntop");
-          }
-          uint16_t port_c = ntohs(client_addr.sin_port);
-
-          // initalize client_t
-
-          memset(clients[indx].buf, read_buf, BUF_SIZE);
-          clients[indx].buf_len = num_read;
-          clients[indx].ip = ip_str;
-          clients[indx].port = port_c;
-          clients[indx].active = true;
-
-          printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
+          // printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
 
           // send the incoming msg to ALL clients (including sender)
-          bool term = handle_client_msg(clients, NUM_CLIENTS, i, read_buf, num_read);
+
+          memcpy(clients[indx].buf, read_buf, num_read);
+          clients[indx].buf_len = num_read;
+          bool term =
+              handle_client_msg(clients, NUM_CLIENTS, i, clients[indx].buf, clients[indx].buf_len);
           if (term == true) {
             close_all_sfd(clients, NUM_CLIENTS);
             close(sfd);
             printf("server terminates successfully");
             return 0;
           }
-
-          if (num_read == -1) {
-            close(clients[i].sfd);
-            handle_error("read"); // client disconnects
-          }
+        }
+        if (num_read == -1) {
+          close(clients[indx].sfd);
+          handle_error("read"); // client disconnects
         }
       }
     }
