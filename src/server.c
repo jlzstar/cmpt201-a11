@@ -18,7 +18,7 @@
 pthread_mutex_t clientLock;
 pthread_mutex_t clientLock2;
 static int num_clients_active = 0;
-static int num_clients_done = 0;
+static int num_clients_connected = 0;
 static int num_type1_received = 0;
 static int next_slot = 0;
 
@@ -99,9 +99,9 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index,
     write(clients[sender_index].sfd, &end, 1);
   }
 
-  if (num_type1_received >= num_clients) {
+  if (num_type1_received >= num_clients_connected) {
     // send type 1 msg to all clients
-    uint8_t end = '1';
+    uint8_t end = 1;
     for (int i = 0; i < num_clients; i++) {
       if (clients[i].active == true) {
         write(clients[i].sfd, &end, 1);
@@ -196,6 +196,7 @@ int main(int argc, char *argv[]) {
           clients[indx].active = true;
           clients[indx].ip = client_addr.sin_addr.s_addr;
           clients[indx].port = client_addr.sin_port;
+          num_clients_connected++;
         }
 
       } else {
