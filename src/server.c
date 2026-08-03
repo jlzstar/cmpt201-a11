@@ -95,18 +95,20 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index,
   } else if (type == 1) {
     clients[sender_index].active = false;
     num_type1_received++;
-    if (num_type1_received >= num_clients) {
-      // send type 1 msg to all clients
-      uint8_t end = '1';
-      for (int i = 0; i < num_clients; i++) {
-        if (clients[i].active == true) {
-          write(clients[i].sfd, &end, 1);
-        }
-      }
-      return true; // server should terminate
-    }
+    uint8_t end = '1';
+    write(clients[sender_index].sfd, &end, 1);
   }
 
+  if (num_type1_received >= num_clients) {
+    // send type 1 msg to all clients
+    uint8_t end = '1';
+    for (int i = 0; i < num_clients; i++) {
+      if (clients[i].active == true) {
+        write(clients[i].sfd, &end, 1);
+      }
+    }
+    return true; // server should terminate
+  }
   return false;
 }
 
@@ -222,7 +224,7 @@ int main(int argc, char *argv[]) {
             return 0;
           }
         }
-        if (num_read == 0 && !(errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (num_read == 0 && !(num_read == -1 && errno == EAGAIN && errno == EWOULDBLOCK)) {
           // client disconnects
           epoll_ctl(epollfd, EPOLL_CTL_DEL, clients[indx].sfd, NULL);
           close(clients[indx].sfd);
