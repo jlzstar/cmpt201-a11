@@ -28,7 +28,7 @@ typedef struct {
   uint16_t port;
   bool active;
   uint8_t buf[BUF_SIZE];
-  size_t buf_len;
+  ssize_t buf_len;
 } client_t;
 
 int init_server_socket(int16_t port, int backlog) {
@@ -73,16 +73,13 @@ size_t s2c_msging_protocol(uint8_t *client_buf, size_t client_buf_len, uint32_t 
   memcpy(out_buf + offset, &port, 2);
   offset += 2;
 
-  memcpy(out_buf + offset, client_buf, client_buf_len);
-  offset += client_buf_len;
-
-  out_buf[offset] = '\n';
-  offset += 1;
+  memcpy(out_buf + offset, client_buf + 1, client_buf_len - 1);
+  offset += client_buf_len - 1;
   return offset;
 }
 
 bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index, uint8_t *read_buf,
-                       size_t num_read) {
+                       ssize_t num_read) {
 
   int type = read_buf[0];
   if (type == 0) {
@@ -192,9 +189,9 @@ int main(int argc, char *argv[]) {
 
         int indx = find_client_index_by_fd(clients, NUM_CLIENTS, events[i].data.fd);
         if (indx == -1)
-          handle_error("find_cl_idx_by_fd");
+          continue;
 
-        size_t num_read = 0;
+        ssize_t num_read = 0;
         while ((num_read = read(events[i].data.fd, read_buf, BUF_SIZE)) > 0) {
 
           // printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
@@ -212,9 +209,11 @@ int main(int argc, char *argv[]) {
             return 0;
           }
         }
-        if (num_read == -1) {
+        if (num_read == 0 && !(errno == EAGAIN || errno == EWOULDBLOCK)) {
+          // client disconnects
+          epoll_ctl(epollfd, EPOLL_CTL_DEL, clients[indx].sfd, NULL);
           close(clients[indx].sfd);
-          handle_error("read"); // client disconnects
+          clients[indx].active = false;
         }
       }
     }
