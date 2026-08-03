@@ -118,6 +118,14 @@ int find_client_index_by_fd(client_t *clients, int num_clients, int fd) {
   return -1;
 }
 
+int find_free_slot(client_t *clients, int n_cl) {
+  for (int i = 0; i < n_cl; i++) {
+    if (clients[i].active == false)
+      return i;
+  }
+  return -1;
+}
+
 int main(int argc, char *argv[]) {
   if (argc != 3) {
     handle_error("incorrect arguments");
@@ -178,17 +186,22 @@ int main(int argc, char *argv[]) {
         if (epoll_ctl(epollfd, EPOLL_CTL_ADD, cfd, &ev) == -1)
           handle_error("epoll_ctl: conn_sock");
 
-        int indx = next_slot++;
-        clients[indx].sfd = cfd;
-        clients[indx].active = true;
-        clients[indx].ip = client_addr.sin_addr.s_addr;
-        clients[indx].port = client_addr.sin_port;
+        int indx = find_free_slot(clients, NUM_CLIENTS);
+        if (indx == -1) {
+          close(cfd);
+        } else {
+          clients[indx].sfd = cfd;
+          clients[indx].active = true;
+          clients[indx].ip = client_addr.sin_addr.s_addr;
+          clients[indx].port = client_addr.sin_port;
+        }
 
       } else {
         // case 2: the incoming signal is an existing client sending data
 
         int indx = find_client_index_by_fd(clients, NUM_CLIENTS, events[i].data.fd);
         if (indx == -1)
+
           continue;
 
         ssize_t num_read = 0;
