@@ -49,7 +49,18 @@ int init_server_socket(int16_t port, int backlog) {
   return sfd;
 }
 
-size_t s2c_msging_protocol(uint8_t *client_buf, uint32_t *ip_str, uint16_t port, char *out_buf) {
+void close_all_sfd(client_t *clients, size_t num_clients) {
+  for (int i = 0; i < num_clients; i++) {
+    if (clients[i].active == true) {
+      clients[i].active = false;
+      close(clients[i].sfd);
+    }
+  }
+  return;
+}
+
+size_t s2c_msging_protocol(uint8_t *client_buf, size_t client_buf_len, uint32_t *ip_str,
+                           uint16_t port, char *out_buf) {
 
   size_t offset = 0;
   out_buf[offset] = client_buf[0];
@@ -61,9 +72,8 @@ size_t s2c_msging_protocol(uint8_t *client_buf, uint32_t *ip_str, uint16_t port,
   memcpy(out_buf + offset, &port, 2);
   offset += 2;
 
-  size_t msg_len = strnlen(client_buf, BUF_SIZE);
-  memcpy(out_buf + offset, client_buf, msg_len);
-  offset += msg_len;
+  memcpy(out_buf + offset, client_buf, client_buf_len);
+  offset += client_buf_len;
 
   out_buf[offset] = '\n';
   offset += 1;
@@ -167,6 +177,8 @@ int main(int argc, char *argv[]) {
 
         clients[i].sfd = cfd;
         clients[i].active = true;
+        clients[i].ip = client_addr.sin_addr.s_addr;
+        clients[i].port = client_addr.sin_port;
 
       } else {
         // case 2: the incoming signal is an existing client sending data
@@ -190,21 +202,24 @@ int main(int argc, char *argv[]) {
 
           printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
 
-          // message protocol
+          // message protocosl
           char out_buf[1 + 4 + 2 + BUF_SIZE + 1];
-          ssize_t out_buf_len = s2c_msging_protocol(&read_buf, &ip_str, port_c, out_buf);
+          ssize_t out_buf_len =
+              s2c_msging_protocol(read_buf, num_read, clients[i].ip, clients[i].port, out_buf);
 
           // send the incoming msg to ALL clients (including sender)
           bool term = handle_client_msg(clients, NUM_CLIENTS, i, out_buf, out_buf_len);
           if (term == true) {
-            close_all_sfd();
+            close_all_sfd(clients, NUM_CLIENTS);
             close(sfd);
             printf("server terminates successfully");
             return 0;
           }
 
-          if (num_read == -1)
+          if (num_read == -1) {
+            close(clients[i].sfd);
             handle_error("read"); // client disconnects
+          }
         }
       }
     }
