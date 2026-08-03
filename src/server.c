@@ -67,7 +67,7 @@ size_t s2c_msging_protocol(uint8_t *client_buf, size_t client_buf_len, uint32_t 
   out_buf[offset] = client_buf[0];
   offset += 1;
 
-  memcpy(out_buf + offset, &ip_str, 4);
+  memcpy(out_buf + offset, ip_str, 4);
   offset += 4;
 
   memcpy(out_buf + offset, &port, 2);
@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
   }
 
   client_t clients[NUM_CLIENTS];
-
+  memset(clients, 0, sizeof(clients));
   struct sockaddr_in client_addr;
   int sfd, cfd, epollfd;
   int nfds;
@@ -203,8 +203,8 @@ int main(int argc, char *argv[]) {
 
           memcpy(clients[indx].buf, read_buf, num_read);
           clients[indx].buf_len = num_read;
-          bool term =
-              handle_client_msg(clients, NUM_CLIENTS, i, clients[indx].buf, clients[indx].buf_len);
+          bool term = handle_client_msg(clients, NUM_CLIENTS, indx, clients[indx].buf,
+                                        clients[indx].buf_len);
           if (term == true) {
             close_all_sfd(clients, NUM_CLIENTS);
             close(sfd);
