@@ -94,7 +94,7 @@ void *receiver_thread(void *args) {
   size_t buf_len = 0;
   ssize_t n = 0;
 
-  while ((n == read(c->sfd, buf_len + buf, sizeof(buf) - buf_len)) > 0)
+  while ((n = read(c->sfd, buf_len + buf, sizeof(buf) - buf_len)) > 0)
     buf_len += n;
 
   // find the newline position within buf
@@ -139,7 +139,7 @@ void *receiver_thread(void *args) {
       atomic_store(&c->active, false);
       return NULL;
     }
-    start = (newline - buf);
+    start = (newline - buf) + 1;
 
     // shift leftover msgs to the front of buf, for the next iteration to read it
     size_t remain_bytes = buf_len - start;
