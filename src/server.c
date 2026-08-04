@@ -26,6 +26,7 @@ typedef struct {
   uint32_t ip;
   uint16_t port;
   bool active;
+  bool sent_type1;
   uint8_t buf[BUF_SIZE];
   ssize_t buf_len;
 } client_t;
@@ -100,10 +101,11 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
 
     // type 1 msg - increment type1 msg received, write type 1 msg to the sender
     if (type == 1) {
-
-      num_type1_received++;
-      write(c->sfd, end_msg, 2);
-
+      if (c->sent_type1 == false) {
+        num_type1_received++;
+        c->sent_type1 = true;
+      }
+      // write(c->sfd, end_msg, 2);
     } else if (type == 0) {
       // type 0 msg - send it to all clients (including sender)
       // parse msg into [type][ip][port][msg][\n] format
@@ -248,11 +250,18 @@ int main(int argc, char *argv[]) {
             return 0;
           }
         }
-        if (num_read == 0 && !(num_read == -1 && errno == EAGAIN && errno == EWOULDBLOCK)) {
+        if (num_read == 0) {
           // client disconnects
           epoll_ctl(epollfd, EPOLL_CTL_DEL, clients[indx].sfd, NULL);
           close(clients[indx].sfd);
+          if (clients[indx].sent_type1) {
+            num_type1_received--;
+          }
+          num_clients_connected--;
           clients[indx].active = false;
+
+        } else if (!(num_read == -1 && errno == EAGAIN && errno == EWOULDBLOCK)) {
+          handle_error("read");
         }
       }
     }
