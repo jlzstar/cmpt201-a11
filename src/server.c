@@ -121,12 +121,12 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
       }
     }
     // check if server should terminate
-    if (num_type1_received >= num_clients_connected) {
+    if (num_clients_connected == num_clients && num_type1_received >= num_clients_connected) {
       uint8_t end_msg[2] = {1, '\n'};
       for (int i = 0; i < num_clients; i++) {
         if (clients[i].active == true) {
           if (send(clients[i].sfd, end_msg, 2, MSG_NOSIGNAL) == -1)
-            continue;
+            handle_error("send");
         }
       }
       return true; // server terminates
