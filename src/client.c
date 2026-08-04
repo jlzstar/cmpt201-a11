@@ -94,63 +94,68 @@ void *receiver_thread(void *args) {
   size_t buf_len = 0;
   ssize_t n = 0;
 
-  while ((n = read(c->sfd, buf_len + buf, sizeof(buf) - buf_len)) > 0)
-    buf_len += n;
-
-  // find the newline position within buf
-  size_t start = 0;
-  for (;;) {
+  //
+  while (1) {
+    // check for a message in buf
     uint8_t *newline = NULL;
-    for (size_t i = start; i < buf_len; i++) {
-      if (buf[i] == '\n')
+    for (size_t i = 0; i < buf_len; i++) {
+      if (buf[i] == '\n') {
         newline = &buf[i];
-      break;
+        break;
+      }
     }
 
-    // if newline pos not in buf, return back to beginning of while() to read more bytes
-    if (newline == NULL)
-      break;
+    // if it's not a complete msg, read from socket for more bytes
+    if (newline == NULL) {
+      ssize_t n = read(c->sfd, buf + buf_len, sizeof(buf) - buf_len);
+      if (n == -1)
+        handle_error("read");
+      if (n == 0)
+        break;
+      buf_len += n;
+    }
 
-    uint8_t type = buf[start];
+    uint8_t type = buf[0];
+    // type 0 msg
     if (type == 0) {
       uint32_t ip;
       uint16_t port;
       memcpy(&ip, buf + 1, 4);
       memcpy(&port, buf + 1 + 4, 2);
 
-      size_t header_len = 1 + 4 + 2;
-      size_t text_start = start + header_len;
+      size_t header_len = 1 + 4 + 2; // byte size of type, ip, port
+      size_t msg_len = (newline - buf) - header_len;
 
       char msg[BUF_SIZE + 1];
-      size_t msg_len = (newline - buf) - (header_len - start);
-      memcpy(msg, buf + text_start, msg_len);
+      memcpy(msg, buf + header_len, msg_len);
       msg[msg_len] = '\0';
 
-      // convert ip to strings
       char ip_final[32];
       inet_ntop(AF_INET, &ip, ip_final, sizeof(ip_final));
       uint16_t port_final = ntohs(port);
 
-      // print msg and add it to log
-      printf("%-15s%-10u%s\n", ip_final, port_final, msg);
+      // log and display msg
       add_msg2file(c->log_fp, (const char *)ip_final, port_final, msg);
+      printf("%-15s%-10u%s", ip_final, port_final, msg);
 
-    } else if (type == 1) { // if receives type 1 msg, terminate client
+      // type 1 msg
+    } else if (type == 1) {
       atomic_store(&c->active, false);
       return NULL;
     }
-    start = (newline - buf) + 1;
 
-    // shift leftover msgs to the front of buf, for the next iteration to read it
-    size_t remain_bytes = buf_len - start;
-    memmove(buf, buf + start, remain_bytes);
-    buf_len = remain_bytes;
+    // keep leftover bytes and remove handled bytes
+    size_t handled = (newline - buf) + 1;
+    size_t remaining = buf_len - handled;
+    memmove(buf, buf + handled, remaining);
+    buf_len = remaining;
+
+    // check
+    if (n == -1)
+      handle_error("read");
+    if (n == 0)
+      return NULL; // server closed connection
   }
-
-  if (n == -1)
-    handle_error("read");
-  if (n == 0)
-    return NULL; // server closed connection
   return NULL;
 }
 
