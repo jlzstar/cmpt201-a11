@@ -84,10 +84,14 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index,
   for (;;) {
     // check for msg in read_buf
     uint8_t *newLine = NULL;
-
+    for (int i = 0; i < num_read; i++) {
+      if (read_buf[i] == '\n') {
+        newLine = &read_buf[i];
+      }
+    }
     // if not a complete msg, read from socket for more bytes
     if (newLine == NULL) {
-      ssize_t n = read();
+      ssize_t n = read(clients[sender_index].sfd, );
     }
 
     // type 1 msg
