@@ -80,6 +80,7 @@ size_t s2c_msging_protocol(uint8_t *client_buf, size_t client_buf_len, uint32_t 
 bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index) {
 
   client_t *c = &clients[sender_index];
+  uint8_t end_msg[2] = {1, '\n'};
 
   for (;;) {
     // check for msg in the client's buf
@@ -101,8 +102,7 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
     if (type == 1) {
 
       num_type1_received++;
-      uint8_t end = 1;
-      // write(c->sfd, &end, 1);
+      write(c->sfd, end_msg, 2);
 
     } else if (type == 0) {
       // type 0 msg - send it to all clients (including sender)
@@ -119,10 +119,10 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
     }
     // check if server should terminate
     if (num_type1_received >= num_clients_connected) {
-      uint8_t end = 1;
+      uint8_t end_msg[2] = {1, '\n'};
       for (int i = 0; i < num_clients; i++) {
         if (clients[i].active == true) {
-          write(clients[i].sfd, &end, 1);
+          write(clients[i].sfd, end_msg, 2);
         }
       }
       return true; // server terminates
