@@ -104,6 +104,7 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
       if (c->sent_type1 == false) {
         num_type1_received++;
         c->sent_type1 = true;
+        // send(c->sfd, end_msg, 2, MSG_NOSIGNAL);
       }
       // write(c->sfd, end_msg, 2);
     } else if (type == 0) {
@@ -248,7 +249,8 @@ int main(int argc, char *argv[]) {
           bool term = handle_client_msg(clients, NUM_CLIENTS, indx);
           if (term == true) {
             close_all_sfd(clients, NUM_CLIENTS);
-            close(sfd);
+            if (close(sfd) == -1)
+              handle_error("close");
             printf("server terminates successfully");
             return 0;
           }
