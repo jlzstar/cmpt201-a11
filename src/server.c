@@ -133,9 +133,9 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
     }
 
     // shift leftover bytes to the front of buf
-    size_t leftover = c->buf_len - msg_len;
-    memmove(c->buf, c->buf + msg_len, leftover);
-    c->buf_len = leftover;
+    size_t leftover_len = c->buf_len - msg_len;
+    memmove(c->buf, c->buf + msg_len, leftover_len);
+    c->buf_len = leftover_len;
   }
   return false;
 }
@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
 
         int indx = find_free_slot(clients, NUM_CLIENTS);
         if (indx == -1) {
-          close(cfd);
+          continue;
         } else {
           clients[indx].sfd = cfd;
           clients[indx].active = true;
@@ -232,18 +232,18 @@ int main(int argc, char *argv[]) {
 
         int indx = find_client_index_by_fd(clients, NUM_CLIENTS, events[i].data.fd);
         if (indx == -1)
-
           continue;
 
         ssize_t num_read = 0;
-        while ((num_read = read(events[i].data.fd, clients[indx].buf + clients[indx].buf_len,
-                                BUF_SIZE - clients[indx].buf_len)) > 0) {
+        while (clients[indx].buf_len < BUF_SIZE) {
+          num_read = read(events[i].data.fd, clients[indx].buf + clients[indx].buf_len,
+                          BUF_SIZE - clients[indx].buf_len);
+          if (num_read <= 0)
+            break;
+
           clients[indx].buf_len += num_read;
 
-          // printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
-
           // send the incoming msg to ALL clients (including sender)
-
           bool term = handle_client_msg(clients, NUM_CLIENTS, indx);
           if (term == true) {
             close_all_sfd(clients, NUM_CLIENTS);
@@ -252,6 +252,10 @@ int main(int argc, char *argv[]) {
             return 0;
           }
         }
+
+        if (clients[indx].buf_len == BUF_SIZE)
+          continue;
+
         if (num_read == 0) {
           // client disconnects
           epoll_ctl(epollfd, EPOLL_CTL_DEL, clients[indx].sfd, NULL);
@@ -262,7 +266,7 @@ int main(int argc, char *argv[]) {
           num_clients_connected--;
           clients[indx].active = false;
 
-        } else if (!(num_read == -1 && errno == EAGAIN && errno == EWOULDBLOCK)) {
+        } else if ((num_read == -1 && errno != EAGAIN && errno != EWOULDBLOCK)) {
           handle_error("read");
         }
       }
