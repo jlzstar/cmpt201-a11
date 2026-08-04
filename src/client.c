@@ -110,46 +110,48 @@ void *receiver_thread(void *args) {
     // if newline pos not in buf, return back to beginning of while() to read more bytes
     if (newline == NULL)
       break;
+
+    uint8_t type = buf[start];
+    if (type == 0) {
+      uint32_t ip;
+      uint16_t port;
+      memcpy(&ip, buf + 1, 4);
+      memcpy(&port, buf + 1 + 4, 2);
+
+      size_t header_len = 1 + 4 + 2;
+      size_t text_start = start + header_len;
+
+      char msg[BUF_SIZE + 1];
+      size_t msg_len = (newline - buf) - (header_len - start);
+      memcpy(msg, buf + text_start, msg_len);
+      msg[msg_len] = '\0';
+
+      // convert ip to strings
+      char ip_final[32];
+      inet_ntop(AF_INET, &ip, ip_final, sizeof(ip_final));
+      uint16_t port_final = ntohs(port);
+
+      // print msg and add it to log
+      printf("%-15s%-10u%s\n", ip_final, port_final, msg);
+      add_msg2file(c->log_fp, (const char *)ip_final, port_final, msg);
+
+    } else if (type == 1) { // if receives type 1 msg, terminate client
+      atomic_store(&c->active, false);
+      return NULL;
+    }
+    start = (newline - buf);
+
+    // shift leftover msgs to the front of buf, for the next iteration to read it
+    size_t remain_bytes = buf_len - start;
+    memmove(buf, buf + start, remain_bytes);
+    buf_len = remain_bytes;
   }
-  uint8_t type = buf[start];
-  if (type == 0) {
-    uint32_t ip;
-    uint16_t port;
-    memcpy(&ip, buf + 1, 4);
-    memcpy(&port, buf + 1 + 4, 2);
 
-    char msg[BUF_SIZE + 1];
-    size_t msg_len = newline - buf;
-    memcpy(msg, buf + 1 + 4 + 2, msg_len);
-    msg[msg_len] = '\0';
-
-    // convert ip to strings
-    char ip_final[32];
-    inet_ntop(AF_INET, &ip, ip_final, sizeof(ip_final));
-    uint16_t port_final = ntohs(port);
-
-    // print msg and add it to log
-    printf("%-15s%-10u%s\n", ip_final, port_final, msg);
-    add_msg2file(c->log_fp, (const char *)ip_final, port_final, msg);
-
-  } else if (type == 1) { // if receives type 1 msg, terminate client
-    atomic_store(&c->active, false);
-    return NULL;
-  }
-  start = (newline - buf);
-}
-
-// shift leftover msgs to the front of buf, for the next iteration to read it
-size_t remain_bytes = buf_len - start;
-memmove(buf, buf + start, remain_bytes);
-buf_len = remain_bytes;
-}
-
-if (n == -1)
-  handle_error("read");
-if (n == 0)
-  return NULL; // server closed connection
-return NULL;
+  if (n == -1)
+    handle_error("read");
+  if (n == 0)
+    return NULL; // server closed connection
+  return NULL;
 }
 
 int main(int argc, char *argv[]) {
