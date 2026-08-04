@@ -115,7 +115,8 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
 
       for (int i = 0; i < num_clients; i++) {
         if (clients[i].active == true) {
-          write(clients[i].sfd, out_buf, out_buf_len);
+          if (send(clients[i].sfd, out_buf, out_buf_len, MSG_NOSIGNAL) == -1)
+            continue;
         }
       }
     }
@@ -124,7 +125,8 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
       uint8_t end_msg[2] = {1, '\n'};
       for (int i = 0; i < num_clients; i++) {
         if (clients[i].active == true) {
-          write(clients[i].sfd, end_msg, 2);
+          if (send(clients[i].sfd, end_msg, 2, MSG_NOSIGNAL) == -1)
+            continue;
         }
       }
       return true; // server terminates
