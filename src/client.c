@@ -30,7 +30,7 @@ typedef struct {
 } client_t;
 
 void add_msg2file(FILE *fp, const char *ip, uint16_t port, const char *str) {
-  fprintf(fp, "%-15s%-10u%s", ip, port, str);
+  fprintf(fp, "%-15s%-10u%s\n", ip, port, str);
   fprintf(fp, "\n");
 }
 
@@ -92,7 +92,7 @@ void *receiver_thread(void *args) {
   client_t *c = (client_t *)args;
   uint8_t buf[BUF_SIZE];
   size_t buf_len = 0;
-  ssize_t n = 0;
+  // ssize_t n = 0;
 
   //
   while (1) {
@@ -113,6 +113,7 @@ void *receiver_thread(void *args) {
       if (n == 0)
         break;
       buf_len += n;
+      continue;
     }
 
     uint8_t type = buf[0];
@@ -149,12 +150,6 @@ void *receiver_thread(void *args) {
     size_t remaining = buf_len - handled;
     memmove(buf, buf + handled, remaining);
     buf_len = remaining;
-
-    // check
-    if (n == -1)
-      handle_error("read");
-    if (n == 0)
-      return NULL; // server closed connection
   }
   return NULL;
 }
@@ -185,7 +180,7 @@ int main(int argc, char *argv[]) {
 
   client_t c;
   c.sfd = sfd;
-  c.num_msgs = (uint8_t)atoi(argv[3]);
+  c.num_msgs = (int)atoi(argv[3]);
   c.log_fp = fopen(argv[4], "w");
   atomic_store(&c.active, true);
 
