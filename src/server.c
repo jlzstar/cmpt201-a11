@@ -77,17 +77,12 @@ size_t s2c_msging_protocol(uint8_t *client_buf, size_t client_buf_len, uint32_t 
   return offset;
 }
 
-bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index, uint8_t *read_buf,
-                       ssize_t num_read) {
+bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index) {
 
   client_t *c = &clients[sender_index];
 
-  // store the read bytes into client_t, on top of previous leftovers (if any)
-  memcpy(c->buf + c->buf_len, read_buf, num_read);
-  c->buf_len += num_read;
-
   for (;;) {
-    // check for msg in read_buf
+    // check for msg in the client's buf
     uint8_t *newLine = NULL;
     for (int i = 0; i < c->buf_len; i++) {
       if (c->buf[i] == '\n') {
@@ -107,7 +102,7 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index,
 
       num_type1_received++;
       uint8_t end = 1;
-      write(c->sfd, &end, 1);
+      // write(c->sfd, &end, 1);
 
     } else if (type == 0) {
       // type 0 msg - send it to all clients (including sender)
@@ -237,16 +232,15 @@ int main(int argc, char *argv[]) {
           continue;
 
         ssize_t num_read = 0;
-        while ((num_read = read(events[i].data.fd, read_buf, BUF_SIZE)) > 0) {
+        while ((num_read = read(events[i].data.fd, clients[indx].buf + clients[indx].buf_len,
+                                BUF_SIZE - clients[indx].buf_len)) > 0) {
+          clients[indx].buf_len += num_read;
 
           // printf("client connected from ip: %s, port: %u\n", ip_str, port_c);
 
           // send the incoming msg to ALL clients (including sender)
 
-          memcpy(clients[indx].buf, read_buf, num_read);
-          clients[indx].buf_len = num_read;
-          bool term = handle_client_msg(clients, NUM_CLIENTS, indx, clients[indx].buf,
-                                        clients[indx].buf_len);
+          bool term = handle_client_msg(clients, NUM_CLIENTS, indx);
           if (term == true) {
             close_all_sfd(clients, NUM_CLIENTS);
             close(sfd);
