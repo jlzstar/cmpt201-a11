@@ -17,10 +17,8 @@
 
 pthread_mutex_t clientLock;
 pthread_mutex_t clientLock2;
-static int num_clients_active = 0;
-static int num_clients_connected = 0;
+pthread static int num_clients_connected = 0;
 static int num_type1_received = 0;
-static int next_slot = 0;
 
 typedef struct {
   int sfd;
@@ -93,7 +91,8 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index,
     return false; // server does not terminate
 
   } else if (type == 1) {
-    clients[sender_index].active = false;
+    // clients[sender_index].active = false;
+
     num_type1_received++;
     uint8_t end = '1';
     write(clients[sender_index].sfd, &end, 1);

@@ -13,6 +13,8 @@
 #include <unistd.h>
 
 #define BUF_SIZE 1024
+pthread_mutex_t sendLock;
+pthread_mutex_t receiveLock;
 
 typedef struct {
   uint8_t type;
@@ -30,7 +32,7 @@ typedef struct {
 } client_t;
 
 void add_msg2file(FILE *fp, const char *ip, uint16_t port, const char *str) {
-  fprintf(fp, "%-15s%-10u%s\n", ip, port, str);
+  fprintf(fp, "%-15s%-10u%s", ip, port, str);
   fprintf(fp, "\n");
 }
 
@@ -47,6 +49,7 @@ int convert_b2str(uint8_t *buf, ssize_t buf_size, char *str, ssize_t str_size) {
 
 void *sender_thread(void *args) {
   client_t *c = (client_t *)args;
+  
 
   // generate n msgs
   for (int i = 0; i < c->num_msgs; i++) {
