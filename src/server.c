@@ -166,6 +166,7 @@ int main(int argc, char *argv[]) {
     handle_error("# clients is 0");
   }
 
+  // printf("num clients: %d\n", NUM_CLIENTS);
   client_t clients[NUM_CLIENTS];
   memset(clients, 0, sizeof(clients));
   struct sockaddr_in client_addr;
