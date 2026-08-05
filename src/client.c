@@ -89,6 +89,29 @@ void *sender_thread(void *args) {
   return NULL;
 }
 
+int fill_buffer(int sfd, uint8_t **buf, size_t *buf_len, size_t *buf_cap) {
+  if (*buf_len == *buf_cap) {
+    size_t new_cap = *buf_cap * 2;
+    uint8_t *new_buf = realloc(*buf, new_cap);
+    if (new_buf == NULL)
+      handle_error("realloc");
+    *buf = new_buf;
+    *buf_cap = new_cap;
+  }
+  ssize_t n = read(sfd, *buf + *buf_len, *buf_cap - *buf_len);
+  if (n == -1) {
+    if (errno == ECONNRESET) {
+      return 0;
+    }
+    handle_error("read");
+  }
+  if (n == 0) {
+    return 0;
+  }
+  *buf_len += n;
+  return 1; // sucessful
+}
+
 // receives msgs from other clients from the server
 void *receiver_thread(void *args) {
   client_t *c = (client_t *)args;
@@ -101,9 +124,31 @@ void *receiver_thread(void *args) {
 
   //
   while (1) {
-    // check for a message in buf
+    // fill buffer if there's nothing to read
+    if (buf_len < 1) {
+      if (!fill_buffer(c->sfd, &buf, &buf_len, &buf_cap))
+        break;
+      continue;
+    }
+
+    uint8_t type = buf[0];
+    size_t header_len;
+    if (type == 0) {
+      header_len = 1 + 4 + 2;
+    } else if (type == 1) {
+      header_len = 1;
+    }
+
+    // make sure full header block is in the buffer
+    if (buf_len < header_len) {
+      if (!fill_buffer(c->sfd, &buf, &buf_len, &buf_cap))
+        break;
+      continue;
+    }
+
+    // check for a message in buf that ends in '\n'
     uint8_t *newline = NULL;
-    for (size_t i = 0; i < buf_len; i++) {
+    for (size_t i = header_len; i < buf_len; i++) {
       if (buf[i] == '\n') {
         newline = &buf[i];
         break;
@@ -112,29 +157,11 @@ void *receiver_thread(void *args) {
 
     // if it's not a complete msg, read from socket for more bytes
     if (newline == NULL) {
-      if (buf_len == buf_cap) {
-        buf_cap *= 2;
-        uint8_t *new_buf = realloc(buf, buf_cap);
-        if (new_buf == NULL)
-          handle_error("realloc");
-        buf = new_buf;
-      }
-      ssize_t n = read(c->sfd, buf + buf_len, buf_cap - buf_len);
-
-      if (n == -1) {
-        // fprintf(stderr, "debug: errorno =%d (%s)]n", errno, strerror(errno));
-        if (errno == ECONNRESET) {
-          break;
-        }
-        handle_error("read");
-      }
-      if (n == 0)
+      if (!fill_buffer(c->sfd, &buf, &buf_len, &buf_cap))
         break;
-      buf_len += n;
       continue;
     }
 
-    uint8_t type = buf[0];
     // type 0 msg
     if (type == 0) {
       uint32_t ip;
@@ -142,8 +169,12 @@ void *receiver_thread(void *args) {
       memcpy(&ip, buf + 1, 4);
       memcpy(&port, buf + 1 + 4, 2);
 
-      size_t header_len = 1 + 4 + 2; // byte size of type, ip, port
+      //  size_t header_len = 1 + 4 + 2; // byte size of type, ip, port
       size_t msg_len = (newline - buf) - header_len;
+      if (msg_len > BUF_SIZE) {
+        fprintf(stderr, "message is larger than 1024\n");
+        break;
+      }
 
       char msg[BUF_SIZE + 1];
       memcpy(msg, buf + header_len, msg_len);
