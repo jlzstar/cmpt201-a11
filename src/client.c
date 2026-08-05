@@ -49,7 +49,6 @@ int convert_b2str(uint8_t *buf, ssize_t buf_size, char *str, ssize_t str_size) {
 
 void *sender_thread(void *args) {
   client_t *c = (client_t *)args;
-  
 
   // generate n msgs
   for (int i = 0; i < c->num_msgs; i++) {
@@ -110,9 +109,12 @@ void *receiver_thread(void *args) {
 
     // if it's not a complete msg, read from socket for more bytes
     if (newline == NULL) {
+      if (buf_len == sizeof(buf))
+        break; // buf full, but no complete msg
       ssize_t n = read(c->sfd, buf + buf_len, sizeof(buf) - buf_len);
-      if (n == -1)
+      if (n == -1) {
         handle_error("read");
+      }
       if (n == 0)
         break;
       buf_len += n;
@@ -140,7 +142,7 @@ void *receiver_thread(void *args) {
 
       // log and display msg
       add_msg2file(c->log_fp, (const char *)ip_final, port_final, msg);
-      printf("%-15s%-10u%s", ip_final, port_final, msg);
+      printf("%-15s%-10u%s\n", ip_final, port_final, msg);
 
       // type 1 msg
     } else if (type == 1) {
