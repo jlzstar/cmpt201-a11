@@ -325,6 +325,7 @@ int main(int argc, char *argv[]) {
           clients[indx].sfd = -1;
           clients[indx].ip = 0;
           clients[indx].port = 0;
+          clients[indx].sent_type1 = false;
         } else if ((num_read == -1 && errno != EAGAIN && errno != EWOULDBLOCK)) {
           handle_error("read");
         }
