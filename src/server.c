@@ -28,8 +28,9 @@ typedef struct {
   uint16_t port;
   bool active;
   bool sent_type1;
-  uint8_t buf[BUF_SIZE];
+  uint8_t *buf;
   ssize_t buf_len;
+  size_t buf_cap;
 } client_t;
 
 int init_server_socket(int16_t port, int backlog) {
@@ -255,6 +256,12 @@ int main(int argc, char *argv[]) {
           clients[indx].active = true;
           clients[indx].ip = client_addr.sin_addr.s_addr;
           clients[indx].port = client_addr.sin_port;
+          clients[indx].sent_type1 = false;
+          clients[indx].buf_cap = BUF_SIZE;
+          clients[indx].buf_len = 0;
+          clients[indx].buf = malloc(clients[indx].buf_cap);
+          if (clients[indx].buf == NULL)
+            handle_error("malloc");
           num_clients_connected++;
         }
 
@@ -266,9 +273,18 @@ int main(int argc, char *argv[]) {
           continue;
 
         ssize_t num_read = 0;
-        while (clients[indx].buf_len < BUF_SIZE) {
+        for (;;) {
+          if (clients[indx].buf_len == clients[indx].buf_cap) {
+            size_t new_cap = clients[indx].buf_cap * 2;
+            uint8_t *new_buf = realloc(clients[indx].buf, new_cap);
+            if (new_buf == NULL)
+              handle_error("realloc");
+            clients[indx].buf = new_buf;
+            clients[indx].buf_cap = new_cap;
+          }
+
           num_read = read(events[i].data.fd, clients[indx].buf + clients[indx].buf_len,
-                          BUF_SIZE - clients[indx].buf_len);
+                          clients[indx].buf_cap - clients[indx].buf_len);
           if (num_read <= 0)
             break;
 
@@ -278,6 +294,11 @@ int main(int argc, char *argv[]) {
           bool term = handle_client_msg(clients, NUM_CLIENTS, indx);
           if (term == true) {
             close_all_sfd(clients, NUM_CLIENTS);
+
+            // free allocated memory for buf
+            for (int j = 0; j < NUM_CLIENTS; j++) {
+              free(clients[j].buf);
+            }
             if (close(sfd) == -1)
               handle_error("close");
             printf("server terminates successfully");
@@ -288,8 +309,8 @@ int main(int argc, char *argv[]) {
         if (clients[indx].buf_len == BUF_SIZE)
           continue;
 
-        if (num_read == 0) {
-          // client disconnects
+        if (num_read == 0) { // client disconnects
+          // clean up
           epoll_ctl(epollfd, EPOLL_CTL_DEL, clients[indx].sfd, NULL);
           close(clients[indx].sfd);
           if (clients[indx].sent_type1) {
@@ -297,7 +318,12 @@ int main(int argc, char *argv[]) {
           }
           num_clients_connected--;
           clients[indx].active = false;
-
+          free(clients[indx].buf);
+          clients[indx].buf_cap = 0;
+          clients[indx].buf_len = 0;
+          clients[indx].sfd = -1;
+          clients[indx].ip = 0;
+          clients[indx].port = 0;
         } else if ((num_read == -1 && errno != EAGAIN && errno != EWOULDBLOCK)) {
           handle_error("read");
         }
