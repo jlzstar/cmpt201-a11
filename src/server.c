@@ -50,7 +50,7 @@ int init_server_socket(int16_t port, int backlog) {
   return sfd;
 }
 
-void close_all_sfd(client_t *clients, size_t num_clients) {
+void close_all_sfd(client_t *clients, int num_clients) {
   for (int i = 0; i < num_clients; i++) {
     if (clients[i].active == true) {
       clients[i].active = false;
@@ -78,7 +78,27 @@ size_t s2c_msging_protocol(uint8_t *client_buf, size_t client_buf_len, uint32_t 
   return offset;
 }
 
-bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index) {
+int send_all(int fd, void *buf, size_t buf_len) {
+  char *temp = buf;
+  size_t bytes_sent = 0;
+
+  while (bytes_sent < buf_len) {
+    ssize_t n = send(fd, temp + bytes_sent, buf_len - bytes_sent, MSG_NOSIGNAL);
+    if (n > 0) {
+      bytes_sent += n;
+      continue;
+    }
+
+    if (n == -1 && errno == EAGAIN && errno == EWOULDBLOCK) {
+      continue;
+    } else {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+bool handle_client_msg(client_t *clients, int num_clients, int sender_index) {
 
   client_t *c = &clients[sender_index];
   uint8_t end_msg[2] = {1, '\n'};
@@ -116,17 +136,17 @@ bool handle_client_msg(client_t *clients, uint8_t num_clients, int sender_index)
 
       for (int i = 0; i < num_clients; i++) {
         if (clients[i].active == true) {
-          if (send(clients[i].sfd, out_buf, out_buf_len, MSG_NOSIGNAL) == -1)
+          if (send_all(clients[i].sfd, out_buf, out_buf_len) == -1)
             continue;
         }
       }
     }
     // check if server should terminate
     if (num_clients_connected == num_clients && num_type1_received >= num_clients_connected) {
-      uint8_t end_msg[2] = {1, '\n'};
+      // uint8_t end_msg[2] = {1, '\n'};
       for (int i = 0; i < num_clients; i++) {
         if (clients[i].active == true) {
-          if (send(clients[i].sfd, end_msg, 2, MSG_NOSIGNAL) == -1)
+          if (send_all(clients[i].sfd, end_msg, 2) == -1)
             handle_error("send");
         }
       }
@@ -162,7 +182,7 @@ int main(int argc, char *argv[]) {
     handle_error("incorrect arguments");
   }
   uint16_t port = (uint16_t)atoi(argv[1]);
-  const uint8_t NUM_CLIENTS = atoi(argv[2]);
+  const int NUM_CLIENTS = atoi(argv[2]);
   if (NUM_CLIENTS == 0) {
     handle_error("# clients is 0");
   }
