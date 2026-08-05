@@ -57,7 +57,7 @@ void close_all_sfd(client_t *clients, int num_clients) {
     if (clients[i].active == true) {
       clients[i].active = false;
       // close(clients[i].sfd);
-
+      shutdown(clients[i].sfd, SHUT_WR);
       // drain leftover unread bytes
       char drain_buf[1000];
       ssize_t n;
@@ -99,7 +99,7 @@ int send_all(int fd, void *buf, size_t buf_len) {
       continue;
     }
 
-    if (n == -1 && errno == EAGAIN && errno == EWOULDBLOCK) {
+    if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
       continue;
     } else {
       return -1;
@@ -250,6 +250,7 @@ int main(int argc, char *argv[]) {
 
         int indx = find_free_slot(clients, NUM_CLIENTS);
         if (indx == -1) {
+          close(cfd);
           continue;
         } else {
           clients[indx].sfd = cfd;
@@ -306,7 +307,7 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        if (clients[indx].buf_len == BUF_SIZE)
+        if (clients[indx].buf_len == clients[indx].buf_cap)
           continue;
 
         if (num_read == 0) { // client disconnects
