@@ -92,7 +92,10 @@ void *sender_thread(void *args) {
 // receives msgs from other clients from the server
 void *receiver_thread(void *args) {
   client_t *c = (client_t *)args;
-  uint8_t buf[BUF_SIZE];
+  size_t buf_cap = BUF_SIZE;
+  uint8_t *buf = malloc(buf_cap);
+  if (buf == NULL)
+    handle_error("malloc");
   size_t buf_len = 0;
   // ssize_t n = 0;
 
@@ -109,9 +112,15 @@ void *receiver_thread(void *args) {
 
     // if it's not a complete msg, read from socket for more bytes
     if (newline == NULL) {
-      if (buf_len == sizeof(buf))
-        break; // buf full, but no complete msg
-      ssize_t n = read(c->sfd, buf + buf_len, sizeof(buf) - buf_len);
+      if (buf_len == buf_cap) {
+        buf_cap *= 2;
+        uint8_t *new_buf = realloc(buf, buf_cap);
+        if (new_buf == NULL)
+          handle_error("realloc");
+        buf = new_buf;
+      }
+      ssize_t n = read(c->sfd, buf + buf_len, buf_cap - buf_len);
+
       if (n == -1) {
         if (errno == ECONNRESET) {
           break;
@@ -150,6 +159,7 @@ void *receiver_thread(void *args) {
       // type 1 msg
     } else if (type == 1) {
       atomic_store(&c->active, false);
+      free(buf);
       return NULL;
     }
 
@@ -159,6 +169,7 @@ void *receiver_thread(void *args) {
     memmove(buf, buf + handled, remaining);
     buf_len = remaining;
   }
+  free(buf);
   return NULL;
 }
 
