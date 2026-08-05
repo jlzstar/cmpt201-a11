@@ -122,6 +122,7 @@ void *receiver_thread(void *args) {
       ssize_t n = read(c->sfd, buf + buf_len, buf_cap - buf_len);
 
       if (n == -1) {
+        // fprintf(stderr, "debug: errorno =%d (%s)]n", errno, strerror(errno));
         if (errno == ECONNRESET) {
           break;
         }
