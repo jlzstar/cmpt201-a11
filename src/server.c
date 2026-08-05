@@ -91,15 +91,20 @@ size_t s2c_msging_protocol(uint8_t *client_buf, size_t client_buf_len, uint32_t 
 int send_all(int fd, void *buf, size_t buf_len) {
   char *temp = buf;
   size_t bytes_sent = 0;
-
+  int retries = 0;
+  int max_retries = 10000;
   while (bytes_sent < buf_len) {
     ssize_t n = send(fd, temp + bytes_sent, buf_len - bytes_sent, MSG_NOSIGNAL);
     if (n > 0) {
       bytes_sent += n;
+      retries = 0;
       continue;
     }
 
     if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      if (++retries > max_retries) {
+        return -1;
+      }
       continue;
     } else {
       return -1;
