@@ -54,6 +54,14 @@ void close_all_sfd(client_t *clients, int num_clients) {
   for (int i = 0; i < num_clients; i++) {
     if (clients[i].active == true) {
       clients[i].active = false;
+      // close(clients[i].sfd);
+
+      // drain leftover unread bytes
+      char drain_buf[1000];
+      ssize_t n;
+      while ((n = read(clients[i].sfd, drain_buf, sizeof(drain_buf))) > 0) {
+      }
+
       close(clients[i].sfd);
     }
   }

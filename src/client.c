@@ -113,6 +113,9 @@ void *receiver_thread(void *args) {
         break; // buf full, but no complete msg
       ssize_t n = read(c->sfd, buf + buf_len, sizeof(buf) - buf_len);
       if (n == -1) {
+        if (errno == ECONNRESET) {
+          break;
+        }
         handle_error("read");
       }
       if (n == 0)
