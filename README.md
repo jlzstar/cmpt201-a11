@@ -43,17 +43,24 @@ Implements a simplified two-phase commit for graceful shutdown:
 ## Build
 
 ```bash
-mkdir build && cd build
-cmake ..
-make
+cmake --build build
+cmake -S . -B build
+cd build
 ```
 
-Produces two executables: `server` and `client`.
+Produces two executables: `server` and `client` in `/build`.
 
 ## Usage
 
+Run the server in one terminal, and the client in a separate terminal — you'll need one terminal per client if starting more than one:
+
+Terminal 1 (server):
 ```bash
 ./server <port> <# of clients>
+```
+
+Terminal 2+ (one per client):
+```bash
 ./client <server IP> <port> <# of messages> <log file path>
 ```
 
